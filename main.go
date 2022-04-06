@@ -43,16 +43,46 @@ func main() {
 	}
 	fmt.Printf("\nTokens: %+v\n", tokens)
 
-	//Validate that no two operators are after each other
+	if len(tokens) == 0 {
+		return
+	}
+
+	//Validate that no two operators are after each other and brackets
+	bracketCount := 0
 	for i := 1; i < len(tokens); i++ {
 
 		tPrev := &tokens[i-1]
 		t := &tokens[i]
 		if tPrev.Type == TokenType_Operator && t.Type == TokenType_Operator {
-			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid", tPrev.Val, t.Val)
+			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid\n", tPrev.Val, t.Val)
+			return
+		}
+
+		if tPrev.Type == TokenType_OpenBracket {
+			bracketCount++
+		} else if tPrev.Type == TokenType_CloseBracket {
+			bracketCount--
+		}
+
+		if bracketCount < 0 {
+			fmt.Printf("Can not have a closing bracket before an opening bracket\n")
 			return
 		}
 	}
+
+	tLast := &tokens[len(tokens)-1]
+	if tLast.Type == TokenType_OpenBracket {
+		bracketCount++
+	} else if tLast.Type == TokenType_CloseBracket {
+		bracketCount--
+	}
+
+	if bracketCount != 0 {
+		fmt.Printf("Not all brackets are closed properly\n")
+		return
+	}
+
+	//Create ast
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
