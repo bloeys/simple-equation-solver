@@ -225,6 +225,27 @@ func getToken(i int, t []Token) *Token {
 func solve(tokens []Token) float64 {
 
 	var ans float64 = 0
+
+	addToAns := func(f float64, prevToken *Token) {
+
+		if prevToken.Type == TokenType_Operator {
+
+			switch prevToken.Val {
+			case "+":
+				ans += f
+			case "-":
+				ans -= f
+			case "*":
+				ans *= f
+			case "/":
+				ans /= f
+			}
+
+		} else {
+			ans += f
+		}
+	}
+
 	for i := 0; i < len(tokens); i++ {
 
 		t := &tokens[i]
@@ -232,49 +253,15 @@ func solve(tokens []Token) float64 {
 		switch t.Type {
 
 		case TokenType_Number:
+
 			fVal, _ := strconv.ParseFloat(t.Val, 64)
-
-			prevToken := getToken(i-1, tokens)
-			if prevToken.Type == TokenType_Operator {
-
-				switch prevToken.Val {
-				case "+":
-					ans += fVal
-				case "-":
-					ans -= fVal
-				case "*":
-					ans *= fVal
-				case "/":
-					ans /= fVal
-				}
-
-			} else {
-				ans += fVal
-			}
+			addToAns(fVal, getToken(i-1, tokens))
 
 		case TokenType_Operator:
 		case TokenType_OpenBracket:
 
 			bracketAns := solve(tokens[i+1:])
-
-			//Add bracket answer to existing answer
-			prevToken := getToken(i-1, tokens)
-			if prevToken.Type == TokenType_Operator {
-
-				switch prevToken.Val {
-				case "+":
-					ans += bracketAns
-				case "-":
-					ans -= bracketAns
-				case "*":
-					ans *= bracketAns
-				case "/":
-					ans /= bracketAns
-				}
-
-			} else {
-				ans += bracketAns
-			}
+			addToAns(bracketAns, getToken(i-1, tokens))
 
 			//Skip brackets that were handled by the recursive solver
 			i++
