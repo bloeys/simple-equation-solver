@@ -24,6 +24,9 @@ func (t *Token) IsEmpty() bool {
 	return t.Type == TokenType_Unknown && t.Val == ""
 }
 
+type ASTNode struct {
+}
+
 func main() {
 
 	fmt.Println("Please input an equation:")
@@ -33,13 +36,23 @@ func main() {
 	// if err != nil {
 	// 	panic("Error reading input. Err: " + err.Error())
 	// }
-	eqn := "5+3\n"
+	eqn := "5+-3\n"
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
 	}
+	fmt.Printf("\nTokens: %+v\n", tokens)
 
-	fmt.Printf("Tokens: %+v\n", tokens)
+	//Validate that no two operators are after each other
+	for i := 1; i < len(tokens); i++ {
+
+		tPrev := &tokens[i-1]
+		t := &tokens[i]
+		if tPrev.Type == TokenType_Operator && t.Type == TokenType_Operator {
+			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid", tPrev.Val, t.Val)
+			return
+		}
+	}
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
@@ -76,8 +89,19 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 			if currToken.Type == TokenType_Number {
 				currToken.Val += string(c)
 			} else {
+
 				addToken(currToken)
 				currToken = Token{Type: TokenType_Number, Val: string(c)}
+
+				var prevChar byte = ' '
+				if i > 0 {
+					prevChar = eqn[i-1]
+				}
+
+				if prevChar == '+' || prevChar == '-' || prevChar == '*' || prevChar == '/' {
+					currToken.Val = string(prevChar) + currToken.Val
+					tokens = deleteToken(len(tokens)-1, tokens)
+				}
 			}
 
 			continue
@@ -113,11 +137,16 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 			addToken(currToken)
 			currToken = Token{}
 		default:
-			fmt.Println("Ignored char:", string(c))
+			isInvalid = true
+			fmt.Println("Invalid char:", string(c))
 		}
 	}
 
 	return tokens, isInvalid
+}
+
+func deleteToken(i int, t []Token) []Token {
+	return append(t[:i], t[i+1:]...)
 }
 
 func getToken(i int, t []Token) *Token {
