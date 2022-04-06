@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strconv"
 	"unicode"
 )
 
@@ -25,6 +26,7 @@ func (t *Token) IsEmpty() bool {
 }
 
 type ASTNode struct {
+	Type TokenType
 }
 
 func main() {
@@ -36,7 +38,7 @@ func main() {
 	// if err != nil {
 	// 	panic("Error reading input. Err: " + err.Error())
 	// }
-	eqn := "5+-3\n"
+	eqn := "2 * (6 + (4 - 6))\n"
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
@@ -47,12 +49,21 @@ func main() {
 		return
 	}
 
-	//Validate that no two operators are after each other and brackets
+	//Validate numbers, that no two operators are after each other and brackets
 	bracketCount := 0
 	for i := 1; i < len(tokens); i++ {
 
 		tPrev := &tokens[i-1]
 		t := &tokens[i]
+
+		if t.Type == TokenType_Number {
+			_, err := strconv.ParseFloat(t.Val, 64)
+			if err != nil {
+				fmt.Printf("Invalid number '%s'\n", t.Val)
+				return
+			}
+		}
+
 		if tPrev.Type == TokenType_Operator && t.Type == TokenType_Operator {
 			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid\n", tPrev.Val, t.Val)
 			return
@@ -71,6 +82,17 @@ func main() {
 	}
 
 	tLast := &tokens[len(tokens)-1]
+
+	//Validate last number
+	if tLast.Type == TokenType_Number {
+		_, err := strconv.ParseFloat(tLast.Val, 64)
+		if err != nil {
+			fmt.Printf("Invalid number '%s'\n", tLast.Val)
+			return
+		}
+	}
+
+	//Consider ending brackets
 	if tLast.Type == TokenType_OpenBracket {
 		bracketCount++
 	} else if tLast.Type == TokenType_CloseBracket {
@@ -82,7 +104,8 @@ func main() {
 		return
 	}
 
-	//Create ast
+	ans := solve(tokens)
+	fmt.Println("\nAnswer is:", ans)
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
@@ -142,7 +165,6 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 
 		case ' ':
 			continue
-
 		case '+':
 			fallthrough
 		case '-':
@@ -163,12 +185,15 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 			addToken(currToken)
 			addToken(Token{Type: TokenType_CloseBracket, Val: string(c)})
 			currToken = Token{}
+
+		case '\r':
+			fallthrough
 		case '\n':
 			addToken(currToken)
 			currToken = Token{}
 		default:
 			isInvalid = true
-			fmt.Println("Invalid char:", string(c))
+			fmt.Printf("Invalid char: '%s'\n", string(c))
 		}
 	}
 
@@ -195,4 +220,80 @@ func getToken(i int, t []Token) *Token {
 	}
 
 	return &t[i]
+}
+
+func solve(tokens []Token) float64 {
+
+	var ans float64 = 0
+	for i := 0; i < len(tokens); i++ {
+
+		t := &tokens[i]
+
+		switch t.Type {
+
+		case TokenType_Number:
+			fVal, _ := strconv.ParseFloat(t.Val, 64)
+
+			prevToken := getToken(i-1, tokens)
+			if prevToken.Type == TokenType_Operator {
+
+				switch prevToken.Val {
+				case "+":
+					ans += fVal
+				case "-":
+					ans -= fVal
+				case "*":
+					ans *= fVal
+				case "/":
+					ans /= fVal
+				}
+
+			} else {
+				ans += fVal
+			}
+
+		case TokenType_Operator:
+		case TokenType_OpenBracket:
+
+			bracketAns := solve(tokens[i+1:])
+
+			//Add bracket answer to existing answer
+			prevToken := getToken(i-1, tokens)
+			if prevToken.Type == TokenType_Operator {
+
+				switch prevToken.Val {
+				case "+":
+					ans += bracketAns
+				case "-":
+					ans -= bracketAns
+				case "*":
+					ans *= bracketAns
+				case "/":
+					ans /= bracketAns
+				}
+
+			} else {
+				ans += bracketAns
+			}
+
+			//Skip brackets that were handled by the recursive solver
+			i++
+			bracketCount := 1
+			for bracketCount != 0 {
+				t := &tokens[i]
+				if t.Type == TokenType_OpenBracket {
+					bracketCount++
+				} else if t.Type == TokenType_CloseBracket {
+					bracketCount--
+				}
+
+				i++
+			}
+
+		case TokenType_CloseBracket:
+			return ans
+		}
+	}
+
+	return ans
 }
