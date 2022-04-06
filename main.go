@@ -151,7 +151,7 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 					prevChar = eqn[i-1]
 				}
 
-				if prevChar == '+' || prevChar == '-' || prevChar == '*' || prevChar == '/' {
+				if prevChar == '+' || prevChar == '-' {
 					currToken.Val = string(prevChar) + currToken.Val
 					tokens = deleteToken(len(tokens)-1, tokens)
 				}
