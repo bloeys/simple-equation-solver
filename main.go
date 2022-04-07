@@ -25,8 +25,39 @@ func (t *Token) IsEmpty() bool {
 	return t.Type == TokenType_Unknown && t.Val == ""
 }
 
-type ASTNode struct {
-	Type TokenType
+type AstType int
+
+const (
+	AstType_Unknown AstType = iota
+	AstType_Number
+	AstType_Operator
+)
+
+type AstNode struct {
+	Type AstType
+	Val  string
+
+	Left  *AstNode
+	Right *AstNode
+}
+
+//TODO: This is garbage
+func (a *AstNode) Print() {
+
+	n := a
+	for n != nil {
+
+		fmt.Println("\t", n.Val, "\n/\t\t\\")
+		if n.Left != nil {
+			fmt.Print(n.Left.Val)
+		}
+
+		if n.Right != nil {
+			fmt.Println("\t\t", n.Right.Val)
+		}
+
+		n = n.Left
+	}
 }
 
 func main() {
@@ -38,7 +69,7 @@ func main() {
 	// if err != nil {
 	// 	panic("Error reading input. Err: " + err.Error())
 	// }
-	eqn := "2 * (6 + (4 - 6))\n"
+	eqn := "1 + 2 * 3 - 4\n"
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
@@ -106,6 +137,19 @@ func main() {
 
 	ans := solve(tokens)
 	fmt.Println("\nAnswer is:", ans)
+
+	a := genAST(tokens)
+	fmt.Printf("Eqn: %s\n", eqn)
+
+	println("Original ast:")
+	a.Print()
+
+	balancedAst := balanceAst(&a)
+	println("Balanced ast:")
+	balancedAst.Print()
+
+	ans2 := solveAst(balancedAst)
+	println("!!!", ans2)
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
@@ -283,4 +327,98 @@ func solve(tokens []Token) float64 {
 	}
 
 	return ans
+}
+
+func genAST(tokens []Token) AstNode {
+
+	n := AstNode{}
+	for i := 0; i < len(tokens); i++ {
+
+		t := &tokens[i]
+		if t.Type != TokenType_Operator {
+			continue
+		}
+
+		prevT := getToken(i-1, tokens)
+		nextT := getToken(i+1, tokens)
+		if nextT.IsEmpty() || (prevT.IsEmpty() && nextT.Type != TokenType_OpenBracket) || prevT.Type == TokenType_Operator || nextT.Type == TokenType_Operator {
+			fmt.Println("Operators must be next to numbers or a bracket")
+			break
+		}
+
+		if n.Type == AstType_Unknown {
+			n.Type = AstType_Operator
+			n.Val = t.Val
+			n.Left = &AstNode{Type: AstType_Number, Val: prevT.Val}
+			n.Right = &AstNode{Type: AstType_Number, Val: nextT.Val}
+		} else {
+
+			oldN := n
+			n = AstNode{
+				Type:  AstType_Operator,
+				Val:   t.Val,
+				Left:  &oldN,
+				Right: &AstNode{Type: AstType_Number, Val: nextT.Val},
+			}
+		}
+
+	}
+
+	return n
+}
+
+//TODO: We only balance one level
+func balanceAst(ast *AstNode) *AstNode {
+
+	curr := ast
+	for curr != nil {
+
+		if isParentAstHigherPriority(ast, ast.Left) {
+			parent := ast
+			child := ast.Left
+			// childChild := ast.Left.Left
+
+			parent.Left = child.Right
+			child.Right = parent
+
+			ast = child
+			curr = ast.Left
+		}
+
+		curr = curr.Left
+	}
+
+	return ast
+}
+
+func isParentAstHigherPriority(parent, child *AstNode) bool {
+
+	if child == nil {
+		return false
+	}
+
+	return (parent.Val == "*" || parent.Val == "/") && (child.Val == "+" || child.Val == "-")
+}
+
+func solveAst(ast *AstNode) float64 {
+
+	if ast.Type == AstType_Number {
+		v, _ := strconv.ParseFloat(ast.Val, 64)
+		return v
+	}
+
+	curr := ast
+	switch curr.Val {
+	case "+":
+		return solveAst(curr.Left) + solveAst(curr.Right)
+	case "-":
+		return solveAst(curr.Left) - solveAst(curr.Right)
+	case "*":
+		return solveAst(curr.Left) * solveAst(curr.Right)
+	case "/":
+		return solveAst(curr.Left) / solveAst(curr.Right)
+	default:
+	}
+
+	panic("Invalid ast. Value: " + curr.Val)
 }
