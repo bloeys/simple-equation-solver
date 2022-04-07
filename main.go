@@ -75,22 +75,22 @@ func main() {
 	}
 
 	//Solve
-	fmt.Printf("Eqn: %s\n", eqn)
 	ast, err := genAST(tokens)
 	if err != nil {
 		fmt.Printf("Failed to parse equation. Error: %s\n", err.Error())
 		return
 	}
 
-	// println("Original ast:")
-	// PrintAst(&ast, 0)
+	println("Original ast:")
+	PrintAst(&ast, 0)
 
 	balancedAst := balanceAst(&ast)
 	println("\nBalanced ast:")
 	PrintAst(balancedAst, 0)
 
 	ans := solveAst(balancedAst)
-	fmt.Println("\nAnswer:", ans)
+	fmt.Printf("\nEqn: %s\n", eqn)
+	fmt.Println("Answer:", ans)
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
@@ -289,15 +289,32 @@ func genAST(tokens []Token) (AstNode, error) {
 
 	n := AstNode{}
 
-	addNode := func(i int, t, prevT, nextT *Token) error {
+	addNode := func(i *int, t, prevT, nextT *Token) error {
 
 		nextAst := &AstNode{Type: nextT.Type, Val: nextT.Val}
+
+		//If we have a bracket on one side then recusrively parse it and add its complete AST
 		if nextT.Type == TokenType_OpenBracket {
-			x, err := genAST(tokens[i+2:])
+			x, err := genAST(tokens[*i+2:])
 			if err != nil {
 				return err
 			}
 			nextAst.Left = &x
+
+			//Skip brackets that were handled by the recursive solver
+			*i += 2
+			bracketCount := 1
+			for bracketCount != 0 {
+				t := &tokens[*i]
+				if t.Type == TokenType_OpenBracket {
+					bracketCount++
+				} else if t.Type == TokenType_CloseBracket {
+					bracketCount--
+				}
+
+				*i++
+			}
+			*i--
 		}
 
 		if n.Type == TokenType_Unknown {
@@ -324,6 +341,33 @@ func genAST(tokens []Token) (AstNode, error) {
 		t := &tokens[i]
 
 		if t.Type == TokenType_OpenBracket {
+
+			//Gen ast for whats inside the brackets
+			nextAst := &AstNode{Type: TokenType_OpenBracket, Val: t.Val}
+			x, err := genAST(tokens[i+1:])
+			if err != nil {
+				return AstNode{}, err
+			}
+
+			nextAst.Left = &x
+
+			//If the first thing we see is a bracket i.e. '(...)' then we handle it as '0 + (...)'
+			if n.Type == TokenType_Unknown {
+				n.Type = TokenType_Operator
+				n.Val = "+"
+				n.Left = &AstNode{Type: TokenType_Number, Val: "0"}
+				n.Right = nextAst
+			} else {
+
+				oldN := n
+				n = AstNode{
+					Type:  TokenType_Operator,
+					Val:   t.Val,
+					Left:  &oldN,
+					Right: nextAst,
+				}
+			}
+
 			//Skip brackets that were handled by the recursive solver
 			i++
 			bracketCount := 1
@@ -337,7 +381,7 @@ func genAST(tokens []Token) (AstNode, error) {
 
 				i++
 			}
-
+			i--
 			continue
 		}
 
@@ -360,7 +404,7 @@ func genAST(tokens []Token) (AstNode, error) {
 			return AstNode{}, errors.New("Operators must be placed between numbers and/or brackets")
 		}
 
-		err := addNode(i, t, prevT, nextT)
+		err := addNode(&i, t, prevT, nextT)
 		if err != nil {
 			return AstNode{}, err
 		}
@@ -409,8 +453,8 @@ func isParentAstHigherPriority(parent, child *AstNode) bool {
 		return false
 	}
 
-	if parent.Val == "(" && child.Val != "(" {
-		return true
+	if parent.Val == "(" {
+		return false
 	}
 
 	return (parent.Val == "*" || parent.Val == "/") && (child.Val == "+" || child.Val == "-")
