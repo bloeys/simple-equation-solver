@@ -68,7 +68,7 @@ func main() {
 	// if err != nil {
 	// 	panic("Error reading input. Err: " + err.Error())
 	// }
-	eqn := "1 + 2 * 3 - 4\n"
+	eqn := "5 * 2 + 1 + 2 * 3 - 4\n"
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
@@ -137,14 +137,14 @@ func main() {
 	ans := solve(tokens)
 	fmt.Println("\nAnswer is:", ans)
 
-	a := genAST(tokens)
+	ast := genAST(tokens)
 	fmt.Printf("Eqn: %s\n", eqn)
 
 	println("Original ast:")
-	PrintAst(&a, 0)
+	PrintAst(&ast, 0)
 
-	balancedAst := balanceAst(&a)
-	println("Balanced ast:")
+	balancedAst := balanceAst(&ast)
+	println("\nBalanced ast:")
 	PrintAst(balancedAst, 0)
 
 	ans2 := solveAst(balancedAst)
@@ -207,7 +207,8 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 		switch c {
 
 		case ' ':
-			continue
+			addToken(currToken)
+			currToken = Token{}
 		case '+':
 			fallthrough
 		case '-':
@@ -366,26 +367,38 @@ func genAST(tokens []Token) AstNode {
 	return n
 }
 
-//TODO: We only balance one level
 func balanceAst(ast *AstNode) *AstNode {
 
-	curr := ast
-	for curr != nil {
-
-		if isParentAstHigherPriority(ast, ast.Left) {
-			parent := ast
-			child := ast.Left
-			// childChild := ast.Left.Left
-
-			parent.Left = child.Right
-			child.Right = parent
-
-			ast = child
-			curr = ast.Left
-		}
-
-		curr = curr.Left
+	if ast == nil {
+		return nil
 	}
+
+	//Rotate right
+	for isParentAstHigherPriority(ast, ast.Left) {
+		println("Rotating right")
+		parent := ast
+		child := ast.Left
+
+		parent.Left = child.Right
+		child.Right = parent
+
+		ast = child
+	}
+
+	//Rotate left
+	for isParentAstHigherPriority(ast, ast.Right) {
+		println("Rotating left")
+		parent := ast
+		child := ast.Right
+
+		parent.Right = child.Left
+		child.Left = parent
+
+		ast = child
+	}
+
+	ast.Left = balanceAst(ast.Left)
+	ast.Right = balanceAst(ast.Right)
 
 	return ast
 }
