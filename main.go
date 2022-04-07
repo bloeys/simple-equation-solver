@@ -47,7 +47,6 @@ func PrintAst(a *AstNode, lvl int) {
 		return
 	}
 
-	// fmt.Print("|")
 	for i := 0; i < lvl; i++ {
 		fmt.Print("\u2502")
 		fmt.Print("  ")
@@ -68,7 +67,7 @@ func main() {
 	// if err != nil {
 	// 	panic("Error reading input. Err: " + err.Error())
 	// }
-	eqn := "5 * 2 + 1 + 2 * 3 - 4\n"
+	eqn := "6+2\n"
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
@@ -167,6 +166,19 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 			return
 		}
 
+		//If we have two subsequent numbers and one has a built-in operator then add a plus between them
+		prevT := getToken(-1, tokens)
+		if t.Type == TokenType_Number && prevT.Type == TokenType_Number {
+
+			if t.Val[0] == '+' || t.Val[0] == '-' {
+				tokens = append(tokens, Token{Type: TokenType_Operator, Val: "+"})
+			} else {
+				fmt.Printf("Error: Two numbers ('%v' and '%v') with no operator between them", prevT.Val, t.Val)
+				isInvalid = true
+				return
+			}
+
+		}
 		tokens = append(tokens, t)
 	}
 
@@ -339,6 +351,7 @@ func genAST(tokens []Token) AstNode {
 			continue
 		}
 
+		//Handle two numbers without an operator
 		prevT := getToken(i-1, tokens)
 		nextT := getToken(i+1, tokens)
 		if nextT.IsEmpty() || (prevT.IsEmpty() && nextT.Type != TokenType_OpenBracket) || prevT.Type == TokenType_Operator || nextT.Type == TokenType_Operator {
@@ -375,7 +388,6 @@ func balanceAst(ast *AstNode) *AstNode {
 
 	//Rotate right
 	for isParentAstHigherPriority(ast, ast.Left) {
-		println("Rotating right")
 		parent := ast
 		child := ast.Left
 
@@ -387,7 +399,6 @@ func balanceAst(ast *AstNode) *AstNode {
 
 	//Rotate left
 	for isParentAstHigherPriority(ast, ast.Right) {
-		println("Rotating left")
 		parent := ast
 		child := ast.Right
 
