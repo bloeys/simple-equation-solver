@@ -41,23 +41,22 @@ type AstNode struct {
 	Right *AstNode
 }
 
-//TODO: This is garbage
-func (a *AstNode) Print() {
+func PrintAst(a *AstNode, lvl int) {
 
-	n := a
-	for n != nil {
-
-		fmt.Println("\t", n.Val, "\n/\t\t\\")
-		if n.Left != nil {
-			fmt.Print(n.Left.Val)
-		}
-
-		if n.Right != nil {
-			fmt.Println("\t\t", n.Right.Val)
-		}
-
-		n = n.Left
+	if a == nil {
+		return
 	}
+
+	// fmt.Print("|")
+	for i := 0; i < lvl; i++ {
+		fmt.Print("\u2502")
+		fmt.Print("  ")
+	}
+
+	fmt.Println("├─'" + a.Val + "'")
+
+	PrintAst(a.Left, lvl+1)
+	PrintAst(a.Right, lvl+1)
 }
 
 func main() {
@@ -142,11 +141,11 @@ func main() {
 	fmt.Printf("Eqn: %s\n", eqn)
 
 	println("Original ast:")
-	a.Print()
+	PrintAst(&a, 0)
 
 	balancedAst := balanceAst(&a)
 	println("Balanced ast:")
-	balancedAst.Print()
+	PrintAst(balancedAst, 0)
 
 	ans2 := solveAst(balancedAst)
 	println("!!!", ans2)
