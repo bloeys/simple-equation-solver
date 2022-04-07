@@ -3,10 +3,15 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"strconv"
 	"unicode"
+)
+
+var (
+	verbose = flag.Bool("v", false, "-v to show verbose logging")
 )
 
 type TokenType int
@@ -36,24 +41,9 @@ type AstNode struct {
 	Right *AstNode
 }
 
-func PrintAst(a *AstNode, lvl int) {
-
-	if a == nil {
-		return
-	}
-
-	for i := 0; i < lvl; i++ {
-		fmt.Print("\u2502")
-		fmt.Print("  ")
-	}
-
-	fmt.Println("├─'" + a.Val + "'")
-
-	PrintAst(a.Left, lvl+1)
-	PrintAst(a.Right, lvl+1)
-}
-
 func main() {
+
+	flag.Parse()
 
 	fmt.Println("Please input an equation:")
 
@@ -62,13 +52,15 @@ func main() {
 	if err != nil {
 		panic("Error reading input. Err: " + err.Error())
 	}
-	// eqn := "+ 5 - 3\n"
 
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
 	}
-	fmt.Printf("\nTokens: %+v\n", tokens)
+
+	if *verbose {
+		fmt.Printf("\nTokens: %+v\n", tokens)
+	}
 
 	if !validateTokens(tokens) {
 		return
@@ -81,15 +73,18 @@ func main() {
 		return
 	}
 
-	println("Original ast:")
-	PrintAst(&ast, 0)
+	if *verbose {
+		println("Original ast:")
+		PrintAst(&ast, 0)
+	}
 
 	balancedAst := balanceAst(&ast)
-	println("\nBalanced ast:")
-	PrintAst(balancedAst, 0)
+	if *verbose {
+		println("\nBalanced ast:")
+		PrintAst(balancedAst, 0)
+	}
 
 	ans := solveAst(balancedAst)
-	fmt.Printf("\nEqn: %s\n", eqn)
 	fmt.Println("Answer:", ans)
 }
 
@@ -135,7 +130,7 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 		c := eqn[i]
 
 		//Handle numbers
-		if unicode.IsDigit(rune(c)) {
+		if unicode.IsDigit(rune(c)) || c == '.' {
 
 			if currToken.Type == TokenType_Number {
 				currToken.Val += string(c)
@@ -411,6 +406,23 @@ func genAST(tokens []Token) (AstNode, error) {
 	}
 
 	return n, nil
+}
+
+func PrintAst(a *AstNode, lvl int) {
+
+	if a == nil {
+		return
+	}
+
+	for i := 0; i < lvl; i++ {
+		fmt.Print("\u2502")
+		fmt.Print("  ")
+	}
+
+	fmt.Println("├─'" + a.Val + "'")
+
+	PrintAst(a.Left, lvl+1)
+	PrintAst(a.Right, lvl+1)
 }
 
 func balanceAst(ast *AstNode) *AstNode {
