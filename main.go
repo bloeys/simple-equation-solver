@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"os"
 	"strconv"
 	"unicode"
 )
@@ -22,19 +25,11 @@ type Token struct {
 }
 
 func (t *Token) IsEmpty() bool {
-	return t.Type == TokenType_Unknown && t.Val == ""
+	return t == nil || (t.Type == TokenType_Unknown && t.Val == "")
 }
 
-type AstType int
-
-const (
-	AstType_Unknown AstType = iota
-	AstType_Number
-	AstType_Operator
-)
-
 type AstNode struct {
-	Type AstType
+	Type TokenType
 	Val  string
 
 	Left  *AstNode
@@ -62,92 +57,40 @@ func main() {
 
 	fmt.Println("Please input an equation:")
 
-	// reader := bufio.NewReader(os.Stdin)
-	// eqn, err := reader.ReadString('\n')
-	// if err != nil {
-	// 	panic("Error reading input. Err: " + err.Error())
-	// }
-	eqn := "6+2\n"
+	reader := bufio.NewReader(os.Stdin)
+	eqn, err := reader.ReadString('\n')
+	if err != nil {
+		panic("Error reading input. Err: " + err.Error())
+	}
+	// eqn := "+ 5 - 3\n"
+
 	tokens, isInvalid := tokenize(eqn)
 	if isInvalid {
 		return
 	}
 	fmt.Printf("\nTokens: %+v\n", tokens)
 
-	if len(tokens) == 0 {
+	if !validateTokens(tokens) {
 		return
 	}
 
-	//Validate numbers, that no two operators are after each other and brackets
-	bracketCount := 0
-	for i := 1; i < len(tokens); i++ {
-
-		tPrev := &tokens[i-1]
-		t := &tokens[i]
-
-		if t.Type == TokenType_Number {
-			_, err := strconv.ParseFloat(t.Val, 64)
-			if err != nil {
-				fmt.Printf("Invalid number '%s'\n", t.Val)
-				return
-			}
-		}
-
-		if tPrev.Type == TokenType_Operator && t.Type == TokenType_Operator {
-			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid\n", tPrev.Val, t.Val)
-			return
-		}
-
-		if tPrev.Type == TokenType_OpenBracket {
-			bracketCount++
-		} else if tPrev.Type == TokenType_CloseBracket {
-			bracketCount--
-		}
-
-		if bracketCount < 0 {
-			fmt.Printf("Can not have a closing bracket before an opening bracket\n")
-			return
-		}
-	}
-
-	tLast := &tokens[len(tokens)-1]
-
-	//Validate last number
-	if tLast.Type == TokenType_Number {
-		_, err := strconv.ParseFloat(tLast.Val, 64)
-		if err != nil {
-			fmt.Printf("Invalid number '%s'\n", tLast.Val)
-			return
-		}
-	}
-
-	//Consider ending brackets
-	if tLast.Type == TokenType_OpenBracket {
-		bracketCount++
-	} else if tLast.Type == TokenType_CloseBracket {
-		bracketCount--
-	}
-
-	if bracketCount != 0 {
-		fmt.Printf("Not all brackets are closed properly\n")
-		return
-	}
-
-	ans := solve(tokens)
-	fmt.Println("\nAnswer is:", ans)
-
-	ast := genAST(tokens)
+	//Solve
 	fmt.Printf("Eqn: %s\n", eqn)
+	ast, err := genAST(tokens)
+	if err != nil {
+		fmt.Printf("Failed to parse equation. Error: %s\n", err.Error())
+		return
+	}
 
-	println("Original ast:")
-	PrintAst(&ast, 0)
+	// println("Original ast:")
+	// PrintAst(&ast, 0)
 
 	balancedAst := balanceAst(&ast)
 	println("\nBalanced ast:")
 	PrintAst(balancedAst, 0)
 
-	ans2 := solveAst(balancedAst)
-	println("!!!", ans2)
+	ans := solveAst(balancedAst)
+	fmt.Println("\nAnswer:", ans)
 }
 
 func tokenize(eqn string) (tokens []Token, isInvalid bool) {
@@ -256,6 +199,70 @@ func tokenize(eqn string) (tokens []Token, isInvalid bool) {
 	return tokens, isInvalid
 }
 
+func validateTokens(tokens []Token) bool {
+
+	if len(tokens) == 0 {
+		return false
+	}
+
+	numberCount := 0
+	bracketCount := 0
+	operatorCount := 0
+	for i := 0; i < len(tokens); i++ {
+
+		t := &tokens[i]
+
+		if t.Type == TokenType_Number {
+
+			numberCount++
+
+			_, err := strconv.ParseFloat(t.Val, 64)
+			if err != nil {
+				fmt.Printf("Invalid number '%s'\n", t.Val)
+				return false
+			}
+		} else if t.Type == TokenType_OpenBracket {
+			bracketCount++
+		} else if t.Type == TokenType_CloseBracket {
+			bracketCount--
+		} else if t.Type == TokenType_Operator {
+			operatorCount++
+		}
+
+		if bracketCount < 0 {
+			fmt.Printf("Can not have a closing bracket before an opening bracket\n")
+			return false
+		}
+
+		if i == 0 {
+			continue
+		}
+
+		tPrev := &tokens[i-1]
+		if tPrev.Type == TokenType_Operator && t.Type == TokenType_Operator {
+			fmt.Printf("Two operators one after the other ('%s' and '%s') are not valid\n", tPrev.Val, t.Val)
+			return false
+		}
+	}
+
+	if bracketCount != 0 {
+		fmt.Printf("Not all brackets are closed properly\n")
+		return false
+	}
+
+	if numberCount < 2 {
+		fmt.Printf("Not a valid equation\n")
+		return false
+	}
+
+	if operatorCount == 0 {
+		fmt.Printf("Need at least one operator\n")
+		return false
+	}
+
+	return true
+}
+
 func deleteToken(i int, t []Token) []Token {
 	return append(t[:i], t[i+1:]...)
 }
@@ -278,47 +285,45 @@ func getToken(i int, t []Token) *Token {
 	return &t[i]
 }
 
-func solve(tokens []Token) float64 {
+func genAST(tokens []Token) (AstNode, error) {
 
-	var ans float64 = 0
+	n := AstNode{}
 
-	addToAns := func(f float64, prevToken *Token) {
+	addNode := func(i int, t, prevT, nextT *Token) error {
 
-		if prevToken.Type == TokenType_Operator {
-
-			switch prevToken.Val {
-			case "+":
-				ans += f
-			case "-":
-				ans -= f
-			case "*":
-				ans *= f
-			case "/":
-				ans /= f
+		nextAst := &AstNode{Type: nextT.Type, Val: nextT.Val}
+		if nextT.Type == TokenType_OpenBracket {
+			x, err := genAST(tokens[i+2:])
+			if err != nil {
+				return err
 			}
-
-		} else {
-			ans += f
+			nextAst.Left = &x
 		}
+
+		if n.Type == TokenType_Unknown {
+			n.Type = TokenType_Operator
+			n.Val = t.Val
+			n.Left = &AstNode{Type: prevT.Type, Val: prevT.Val}
+			n.Right = nextAst
+		} else {
+
+			oldN := n
+			n = AstNode{
+				Type:  TokenType_Operator,
+				Val:   t.Val,
+				Left:  &oldN,
+				Right: nextAst,
+			}
+		}
+
+		return nil
 	}
 
 	for i := 0; i < len(tokens); i++ {
 
 		t := &tokens[i]
 
-		switch t.Type {
-
-		case TokenType_Number:
-
-			fVal, _ := strconv.ParseFloat(t.Val, 64)
-			addToAns(fVal, getToken(i-1, tokens))
-
-		case TokenType_Operator:
-		case TokenType_OpenBracket:
-
-			bracketAns := solve(tokens[i+1:])
-			addToAns(bracketAns, getToken(i-1, tokens))
-
+		if t.Type == TokenType_OpenBracket {
 			//Skip brackets that were handled by the recursive solver
 			i++
 			bracketCount := 1
@@ -333,51 +338,35 @@ func solve(tokens []Token) float64 {
 				i++
 			}
 
-		case TokenType_CloseBracket:
-			return ans
+			continue
 		}
-	}
 
-	return ans
-}
+		if t.Type == TokenType_CloseBracket {
+			return n, nil
+		}
 
-func genAST(tokens []Token) AstNode {
-
-	n := AstNode{}
-	for i := 0; i < len(tokens); i++ {
-
-		t := &tokens[i]
 		if t.Type != TokenType_Operator {
 			continue
 		}
 
 		//Handle two numbers without an operator
-		prevT := getToken(i-1, tokens)
+		var prevT *Token
+		if i > 0 {
+			prevT = getToken(i-1, tokens)
+		}
+
 		nextT := getToken(i+1, tokens)
-		if nextT.IsEmpty() || (prevT.IsEmpty() && nextT.Type != TokenType_OpenBracket) || prevT.Type == TokenType_Operator || nextT.Type == TokenType_Operator {
-			fmt.Println("Operators must be next to numbers or a bracket")
-			break
+		if nextT.IsEmpty() || prevT.IsEmpty() || prevT.Type == TokenType_Operator || nextT.Type == TokenType_Operator {
+			return AstNode{}, errors.New("Operators must be placed between numbers and/or brackets")
 		}
 
-		if n.Type == AstType_Unknown {
-			n.Type = AstType_Operator
-			n.Val = t.Val
-			n.Left = &AstNode{Type: AstType_Number, Val: prevT.Val}
-			n.Right = &AstNode{Type: AstType_Number, Val: nextT.Val}
-		} else {
-
-			oldN := n
-			n = AstNode{
-				Type:  AstType_Operator,
-				Val:   t.Val,
-				Left:  &oldN,
-				Right: &AstNode{Type: AstType_Number, Val: nextT.Val},
-			}
+		err := addNode(i, t, prevT, nextT)
+		if err != nil {
+			return AstNode{}, err
 		}
-
 	}
 
-	return n
+	return n, nil
 }
 
 func balanceAst(ast *AstNode) *AstNode {
@@ -420,12 +409,16 @@ func isParentAstHigherPriority(parent, child *AstNode) bool {
 		return false
 	}
 
+	if parent.Val == "(" && child.Val != "(" {
+		return true
+	}
+
 	return (parent.Val == "*" || parent.Val == "/") && (child.Val == "+" || child.Val == "-")
 }
 
 func solveAst(ast *AstNode) float64 {
 
-	if ast.Type == AstType_Number {
+	if ast.Type == TokenType_Number {
 		v, _ := strconv.ParseFloat(ast.Val, 64)
 		return v
 	}
@@ -439,9 +432,16 @@ func solveAst(ast *AstNode) float64 {
 	case "*":
 		return solveAst(curr.Left) * solveAst(curr.Right)
 	case "/":
-		return solveAst(curr.Left) / solveAst(curr.Right)
+		num := solveAst(curr.Left)
+		deno := solveAst(curr.Right)
+		if deno == 0 {
+			fmt.Printf("Can not divide by zero in: '%v / 0'\n", num)
+			panic("")
+		}
+		return num / deno
+	case "(":
+		return solveAst(curr.Left)
 	default:
+		panic("Invalid AST node. Value: " + curr.Val)
 	}
-
-	panic("Invalid ast. Value: " + curr.Val)
 }
